@@ -21,3 +21,7 @@ __pycache__/
 
 #test
 clients/htx/test_script_htx.py
+
+#environment
+.env
+
