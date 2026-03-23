@@ -1,9 +1,8 @@
-
-
 from datetime import datetime
+from decimal import Decimal
 from enum import Enum
 
-from sqlalchemy import Boolean, DateTime, Integer, String, func
+from sqlalchemy import BigInteger, Boolean, DateTime, Integer, Numeric, String, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -15,6 +14,7 @@ class Base(DeclarativeBase):
 class MockMode(str, Enum):
     REAL = "real"
     MOCK = "mock"
+
 
 
 class MockSettings(Base):
@@ -51,3 +51,31 @@ class MockStub(Base):
         server_default=func.now(),
         onupdate=func.now(),
     )
+
+class Withdraw(Base):
+    __tablename__ = "withdraws"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    type: Mapped[str] = mapped_column(String, nullable=False)
+    sub_type: Mapped[str] = mapped_column(String, nullable=False)
+    currency: Mapped[str] = mapped_column(String, nullable=False)
+    chain: Mapped[str] = mapped_column(String, nullable=False)
+    chain_full_name: Mapped[str] = mapped_column(String, nullable=False)
+    tx_hash: Mapped[str] = mapped_column(String, nullable=False)
+
+    amount: Mapped[Decimal] = mapped_column(Numeric, nullable=False)
+    fee: Mapped[Decimal] = mapped_column(Numeric, nullable=False)
+
+    from_addr_tag: Mapped[str] = mapped_column(String, nullable=False)
+    address_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    address: Mapped[str] = mapped_column(String, nullable=False)
+    address_tag: Mapped[str] = mapped_column(String, nullable=False)
+
+    state: Mapped[str] = mapped_column(String, nullable=False)
+
+    error_code: Mapped[str | None] = mapped_column(String, nullable=True)
+    error_msg: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    created_at: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    updated_at: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    pass_at: Mapped[int | None] = mapped_column(BigInteger, nullable=True)

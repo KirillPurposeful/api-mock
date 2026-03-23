@@ -1,14 +1,6 @@
 from pydantic import BaseModel, ValidationError
 
-from clients.htx.auth import build_signed_params
-from clients.htx.endpoints import (
-    CREATE_WITHDRAW,
-    GET_DEPOSIT_ADDRESS,
-    GET_DEPOSIT_WITHDRAW_HISTORY,
-    GET_ORDERBOOK,
-)
-from clients.htx.exceptions import HtxInvalidResponseError
-from clients.htx.schemas import (
+from app.schemas.htx import (
     CreateWithdrawRequest,
     CreateWithdrawResponse,
     DepositAddressRequestParams,
@@ -18,8 +10,15 @@ from clients.htx.schemas import (
     WithdrawHistoryRequestParams,
     WithdrawHistoryResponse,
 )
+from clients.htx.auth import build_signed_params
+from clients.htx.endpoints import (
+    CREATE_WITHDRAW,
+    GET_DEPOSIT_ADDRESS,
+    GET_DEPOSIT_WITHDRAW_HISTORY,
+    GET_ORDERBOOK,
+)
+from clients.htx.exceptions import HtxAPIError, HtxInvalidResponseError
 from infrastructure.http.transport import HttpTransport
-
 
 
 HUOBI_API_HOST = "api.huobi.pro"
@@ -69,6 +68,20 @@ class HtxClient:
         return response.json()
 
 
+    def _raise_for_htx_error(self, response_data: dict) -> None:
+        if response_data.get("status") == "error":
+            raise HtxAPIError(
+                err_code=response_data.get("err-code", "htx-error"),
+                err_msg=response_data.get("err-msg", "HTX returned an error response"),
+            )
+
+        if "code" in response_data and response_data["code"] != 200:
+            raise HtxAPIError(
+                err_code=str(response_data["code"]),
+                err_msg=response_data.get("message", "HTX returned an error response"),
+            )
+
+
     def _validate_response[ResponseModel: BaseModel](
         self,
         schema: type[ResponseModel],
@@ -96,6 +109,7 @@ class HtxClient:
             body=params.model_dump(by_alias=by_alias, exclude_none=True) if send_as_body else None,
             is_private=is_private,
         )
+        self._raise_for_htx_error(response_data)
         return self._validate_response(schema=schema, response_data=response_data)
 
 

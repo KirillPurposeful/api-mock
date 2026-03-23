@@ -68,7 +68,7 @@ class WithdrawHistoryItem(BaseModel):
     error_msg: str | None = Field(default=None, alias="error-msg")
     created_at: int = Field(alias="created-at")
     updated_at: int = Field(alias="updated-at")
-    pass_at: int = Field(alias="pass-at")
+    pass_at: int | None = Field(default=None, alias="pass-at")
 
 
 class WithdrawHistoryResponse(BaseModel):

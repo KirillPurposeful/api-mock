@@ -1,8 +1,3 @@
-"""Structured exception types for transport and upstream errors."""
-
-from __future__ import annotations
-
-
 class HttpError(Exception):
     """Transport-level error (non-2xx, timeout, connection failure)."""
 

@@ -3,7 +3,8 @@ from collections.abc import Generator
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from mocks.htx.config.settings import get_settings
+from config.settings import get_settings
+
 
 settings = get_settings()
 
@@ -16,7 +17,7 @@ SessionLocal = sessionmaker(
 )
 
 
-def get_db_session() -> Generator[Session, None, None]:
+def get_db() -> Generator[Session, None, None]:
     db = SessionLocal()
     try:
         yield db
