@@ -1,24 +1,6 @@
-from typing import Any
-
-from mocks.htx.db.models import MockStub
 from mocks.htx.exceptions import MockStubErrorStatusError, MockStubNotFoundError
 from mocks.htx.repositories.mock_data import MockDataRepository
-
-
-def _match_stub(stubs: list[MockStub], request_params: dict[str, Any]) -> MockStub | None:
-    for stub in stubs:
-        matcher: dict[str, Any] = stub.matcher or {}
-
-        is_match = True
-        for key, value in matcher.items():
-            if request_params.get(key) != value:
-                is_match = False
-                break
-
-        if is_match:
-            return stub
-
-    return None
+from mocks.htx.services.matcher import match_stub
 
 
 class MockDispatchService:
@@ -29,12 +11,12 @@ class MockDispatchService:
     def dispatch(
         self,
         endpoint_key: str,
-        request_params: dict[str, Any],
+        request_params: dict[str, object],
     ) -> dict[str, object]:
 
         stubs = self._stubs_repo.get_active_stubs(endpoint_key)
 
-        stub = _match_stub(stubs, request_params)
+        stub = match_stub(stubs, request_params)
 
         if stub is None:
             raise MockStubNotFoundError(endpoint_key, request_params)

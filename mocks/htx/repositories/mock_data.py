@@ -22,6 +22,9 @@ class MockDataRepository:
     def __init__(self, db: Session) -> None:
         self._db = db
 
+    def commit(self) -> None:
+        self._db.commit()
+
     def get_active_stubs(self, endpoint_key: str) -> list[MockStub]:
         stmt = (
             select(MockStub)
@@ -34,7 +37,7 @@ class MockDataRepository:
         return list(self._db.execute(stmt).scalars().all())
 
     def create_withdraw(self, data: WithdrawData) -> Withdraw:
-        now_ms = int(time.time() * 1000)
+        now_ms = time.time_ns() // 1000000
 
         withdraw = Withdraw(
             type="withdraw",

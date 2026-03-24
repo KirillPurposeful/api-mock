@@ -64,6 +64,7 @@ class HtxMockService:
             schema=WithdrawHistoryResponse,
         )
 
+
     def create_withdraw(self, body: CreateWithdrawRequest) -> CreateWithdrawResponse:
         data: WithdrawData = {
             "currency": body.currency,
@@ -74,6 +75,8 @@ class HtxMockService:
             "fee": body.fee or Decimal("0"),
         }
         withdraw = self._repo.create_withdraw(data)
+        self._repo.commit()
+
         return CreateWithdrawResponse(status="ok", data=withdraw.id)
 
 

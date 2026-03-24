@@ -1,4 +1,5 @@
-from pydantic import BaseModel, ValidationError
+import requests
+from pydantic import BaseModel
 
 from app.schemas.htx import (
     CreateWithdrawRequest,
@@ -17,11 +18,24 @@ from clients.htx.endpoints import (
     GET_DEPOSIT_WITHDRAW_HISTORY,
     GET_ORDERBOOK,
 )
-from clients.htx.exceptions import HtxAPIError, HtxInvalidResponseError
-from infrastructure.http.transport import HttpTransport
+from clients.htx.exceptions import HtxAPIError
 
 
 HUOBI_API_HOST = "api.huobi.pro"
+
+
+def _check_htx_response(data: dict) -> None:
+    if data.get("status") == "error":
+        raise HtxAPIError(
+            err_code=data.get("err-code", "htx-error"),
+            err_msg=data.get("err-msg", "HTX returned an error response"),
+        )
+
+    if "code" in data and data["code"] != 200:
+        raise HtxAPIError(
+            err_code=str(data["code"]),
+            err_msg=data.get("message", "HTX returned an error response"),
+        )
 
 
 class HtxClient:
@@ -34,122 +48,49 @@ class HtxClient:
     ) -> None:
         self.access_key = access_key
         self.secret_key = secret_key
-        self.transport = HttpTransport(base_url=base_url, timeout=timeout)
         self.host = HUOBI_API_HOST
+        self._base_url = base_url.rstrip("/")
+        self._timeout = timeout
+        self._session = requests.Session()
 
-    def _make_request(
-        self,
-        method: str,
-        path: str,
-        query: dict | None = None,
-        body: dict | None = None,
-        headers: dict[str, str] | None = None,
-        is_private: bool = False,
-    ) -> dict:
-        request_query = query.copy() if query else {}
-
-        if is_private:
-            request_query = build_signed_params(
-                method=method,
-                host=self.host,
-                path=path,
-                access_key=self.access_key,
-                secret_key=self.secret_key,
-                params=request_query,
-            )
-
-        response = self.transport.request(
+    def _sign(self, method: str, path: str, params: dict) -> dict:
+        return build_signed_params(
             method=method,
+            host=self.host,
             path=path,
-            query=request_query,
-            body=body,
-            headers=headers,
+            access_key=self.access_key,
+            secret_key=self.secret_key,
+            params=params,
         )
-        return response.json()
 
+    def _get(self, path: str, query: dict, schema: type[BaseModel]) -> BaseModel:
+        response = self._session.get(f"{self._base_url}{path}", params=query, timeout=self._timeout)
+        response.raise_for_status()
+        data = response.json()
+        _check_htx_response(data)
+        return schema.model_validate(data)
 
-    def _raise_for_htx_error(self, response_data: dict) -> None:
-        if response_data.get("status") == "error":
-            raise HtxAPIError(
-                err_code=response_data.get("err-code", "htx-error"),
-                err_msg=response_data.get("err-msg", "HTX returned an error response"),
-            )
-
-        if "code" in response_data and response_data["code"] != 200:
-            raise HtxAPIError(
-                err_code=str(response_data["code"]),
-                err_msg=response_data.get("message", "HTX returned an error response"),
-            )
-
-
-    def _validate_response[ResponseModel: BaseModel](
-        self,
-        schema: type[ResponseModel],
-        response_data: dict,
-    ) -> ResponseModel:
-        try:
-            return schema.model_validate(response_data)
-        except ValidationError as e:
-            raise HtxInvalidResponseError(f"Invalid HTX response for {schema.__name__}: {e}") from e
-
-    def _make_request_and_validate_response[RequestModel: BaseModel, ResponseModel: BaseModel](
-        self,
-        method: str,
-        path: str,
-        params: RequestModel,
-        schema: type[ResponseModel],
-        is_private: bool = False,
-        by_alias: bool = False,
-        send_as_body: bool = False,
-    ) -> ResponseModel:
-        response_data = self._make_request(
-            method=method.upper(),
-            path=path,
-            query=params.model_dump(by_alias=by_alias, exclude_none=True) if not send_as_body else None,
-            body=params.model_dump(by_alias=by_alias, exclude_none=True) if send_as_body else None,
-            is_private=is_private,
-        )
-        self._raise_for_htx_error(response_data)
-        return self._validate_response(schema=schema, response_data=response_data)
-
-
+    def _post(self, path: str, body: dict, schema: type[BaseModel]) -> BaseModel:
+        response = self._session.post(f"{self._base_url}{path}", json=body, timeout=self._timeout)
+        response.raise_for_status()
+        data = response.json()
+        _check_htx_response(data)
+        return schema.model_validate(data)
 
     def get_orderbook(self, params: OrderBookRequestParams) -> OrderBookResponse:
-        return self._make_request_and_validate_response(method="GET", path=GET_ORDERBOOK, params=params, schema=OrderBookResponse)
+        return self._get(GET_ORDERBOOK, params.model_dump(exclude_none=True), OrderBookResponse)
 
+    def get_deposit_address(self, params: DepositAddressRequestParams) -> DepositAddressResponse:
+        query = self._sign("GET", GET_DEPOSIT_ADDRESS, params.model_dump(exclude_none=True))
+        return self._get(GET_DEPOSIT_ADDRESS, query, DepositAddressResponse)
 
-    def get_deposit_address(
-        self,
-        params: DepositAddressRequestParams,
-    ) -> DepositAddressResponse:
-        return self._make_request_and_validate_response(method="GET",
-            path=GET_DEPOSIT_ADDRESS,
-            params=params,
-            schema=DepositAddressResponse,
-            is_private=True, )
+    def get_withdraw_history(self, params: WithdrawHistoryRequestParams) -> WithdrawHistoryResponse:
+        query = self._sign("GET", GET_DEPOSIT_WITHDRAW_HISTORY, params.model_dump(by_alias=True, exclude_none=True))
+        return self._get(GET_DEPOSIT_WITHDRAW_HISTORY, query, WithdrawHistoryResponse)
 
-    def get_withdraw_history(
-        self,
-        params: WithdrawHistoryRequestParams,
-    ) -> WithdrawHistoryResponse:
-        return self._make_request_and_validate_response(method="GET",
-            path=GET_DEPOSIT_WITHDRAW_HISTORY,
-            params=params,
-            schema=WithdrawHistoryResponse,
-            is_private=True,
-            by_alias=True, )
-
-    def create_withdraw(
-        self,
-        body: CreateWithdrawRequest,
-    ) -> CreateWithdrawResponse:
-        return self._make_request_and_validate_response(method="POST",
-            path=CREATE_WITHDRAW,
-            params=body,
-            schema=CreateWithdrawResponse,
-            is_private=True,
-            by_alias=True,
-            send_as_body=True, )
+    def create_withdraw(self, body: CreateWithdrawRequest) -> CreateWithdrawResponse:
+        query = self._sign("POST", CREATE_WITHDRAW, body.model_dump(by_alias=True, exclude_none=True))
+        return self._post(CREATE_WITHDRAW, query, CreateWithdrawResponse)
 
     def close(self) -> None:
-        self.transport.close()
+        self._session.close()
