@@ -1,3 +1,4 @@
+import time
 from decimal import Decimal
 
 from pydantic import BaseModel, ValidationError
@@ -13,7 +14,8 @@ from app.schemas.htx import (
     WithdrawHistoryRequestParams,
     WithdrawHistoryResponse,
 )
-from mocks.htx.repositories.mock_data import MockDataRepository, WithdrawData
+from mocks.htx.db.models import Withdraw
+from mocks.htx.repositories.mock_data import MockDataRepository
 from mocks.htx.services.dispatch import MockDispatchService
 from mocks.htx.services.endpoint_keys import DEPOSIT_ADDRESS, ORDERBOOK, WITHDRAW_HISTORY
 
@@ -66,17 +68,27 @@ class HtxMockService:
 
 
     def create_withdraw(self, body: CreateWithdrawRequest) -> CreateWithdrawResponse:
-        data: WithdrawData = {
-            "currency": body.currency,
-            "amount": body.amount,
-            "address": body.address,
-            "chain": body.chain or "",
-            "address_tag": body.addr_tag or "",
-            "fee": body.fee or Decimal("0"),
-        }
-        withdraw = self._repo.create_withdraw(data)
+        now_ms = time.time_ns() // 1_000_000
+        withdraw = Withdraw(type="withdraw",
+            sub_type="onchain",
+            currency=body.currency,
+            chain=body.chain or "",
+            chain_full_name=body.chain or "",
+            tx_hash="",
+            amount=body.amount,
+            from_addr_tag="",
+            address_id=0,
+            address=body.address,
+            address_tag=body.addr_tag or "",
+            fee=body.fee if body.fee is not None else Decimal("0"),
+            state="submitted",
+            error_code=None,
+            error_msg=None,
+            created_at=now_ms,
+            updated_at=now_ms,
+            pass_at=None, )
+
+        withdraw = self._repo.save_withdraw(withdraw)
         self._repo.commit()
 
         return CreateWithdrawResponse(status="ok", data=withdraw.id)
-
-

@@ -1,20 +1,8 @@
-import time
-from decimal import Decimal
-from typing import TypedDict
-
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from mocks.htx.db.models import MockStub, Withdraw
 
-
-class WithdrawData(TypedDict):
-    currency: str
-    amount: Decimal
-    address: str
-    chain: str
-    address_tag: str
-    fee: Decimal
 
 
 class MockDataRepository:
@@ -36,30 +24,8 @@ class MockDataRepository:
         )
         return list(self._db.execute(stmt).scalars().all())
 
-    def create_withdraw(self, data: WithdrawData) -> Withdraw:
-        now_ms = time.time_ns() // 1000000
-
-        withdraw = Withdraw(
-            type="withdraw",
-            sub_type="onchain",
-            currency=data["currency"],
-            chain=data["chain"],
-            chain_full_name=data["chain"],
-            tx_hash="",
-            amount=data["amount"],
-            from_addr_tag="",
-            address_id=0,
-            address=data["address"],
-            address_tag=data["address_tag"],
-            fee=data["fee"],
-            state="submitted",
-            error_code=None,
-            error_msg=None,
-            created_at=now_ms,
-            updated_at=now_ms,
-            pass_at=None,
-        )
-
+    def save_withdraw(self,
+            withdraw: Withdraw) -> Withdraw:
         self._db.add(withdraw)
         self._db.flush()
         return withdraw
